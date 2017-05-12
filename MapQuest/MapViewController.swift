@@ -56,14 +56,36 @@ class MapViewController: UIViewController {
 
     NotificationCenter.default.addObserver(self, selector: #selector(gameUpdated(notification:)), name: GameStateNotification, object: nil)
 
+    mapView.delegate = self
+    mapView.addAnnotations(Game.shared.warps)
   }
 
   func setupTileRenderer() {
-    // Add code here
+    let overlay = AdventureMapOverlay()
+    
+    overlay.canReplaceMapContent = true
+    mapView.add(overlay, level: MKOverlayLevel.aboveLabels)
+    tileRenderer = MKTileOverlayRenderer(tileOverlay: overlay)
+    
+    overlay.minimumZ = 13
+    overlay.maximumZ = 16
   }
 
   func setupLakeOverlay() {
-    // Add code here
+    
+    // 1
+    let lake = MKPolygon(coordinates: &Game.shared.reservoir, count: Game.shared.reservoir.count)
+    mapView.add(lake)
+    
+    // 2
+    shimmerRenderer = ShimmerRenderer(overlay: lake)
+    shimmerRenderer.fillColor = #colorLiteral(red: 0.2431372549, green: 0.5803921569, blue: 0.9764705882, alpha: 1)
+    
+    // 3
+    Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+      self?.shimmerRenderer.updateLocations()
+      self?.shimmerRenderer.setNeedsDisplay()
+    }
   }
 
   func gameUpdated(notification: Notification) {
@@ -85,8 +107,38 @@ class MapViewController: UIViewController {
 
 // MARK: - MapView Delegate
 extension MapViewController: MKMapViewDelegate {
-  // Add mapview delegate code here
-
+  func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+    if overlay is AdventureMapOverlay {
+      return tileRenderer
+    } else {
+      return shimmerRenderer
+    }
+  }
+  
+  func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+    switch annotation {
+      
+    // 1
+    case let user as MKUserLocation:
+      
+      // 2
+      let view = mapView.dequeueReusableAnnotationView(withIdentifier: "user")
+        ?? MKAnnotationView(annotation: user, reuseIdentifier: "user")
+      
+      // 3
+      view.image = #imageLiteral(resourceName: "user")
+      return view
+      
+    case let warp as WarpZone:
+      let view = mapView.dequeueReusableAnnotationView(withIdentifier: WarpAnnotationView.identifier)
+        ?? WarpAnnotationView(annotation: warp, reuseIdentifier: WarpAnnotationView.identifier)
+      view.annotation = warp
+      return view
+      
+    default:
+      return nil
+    }
+  }
 }
 
 // MARK: - Game UI
